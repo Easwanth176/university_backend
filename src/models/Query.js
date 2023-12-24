@@ -5,20 +5,27 @@ const FormSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
-    Number: {
+    Regarding: {
         type: String,
         required: true,
     },
-    Email: {
+    Description: {
         type: String,
         required: true,
-        unique: true, // Assuming email should be unique
     },
-    Password: {
+    contact: {
+        type: String,
+        required: true,
+    },
+    solution: {
         type: String,
     },
+    isResolved: {
+        type: Boolean,
+        default: false,
+    },
+
 });
 
-const Student = mongoose.model('Student', FormSchema);
-
-export default Student;
+const Query = mongoose.model('Query', FormSchema);
+export default Query;
