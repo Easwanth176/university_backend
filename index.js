@@ -4,6 +4,7 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import Student from './src/models/Student.js';
 import Query from './src/models/Query.js';
+import Message from './src/models/Message.js';
 
 const app = express();
 
@@ -120,7 +121,31 @@ app.get('/api/solvedQueries', async (req, res) => {
 });
 
 
+app.post('/messages/add', async (req, res) => {
+  try {
+    const { message } = req.body;
+    const newMessage = new Message({ Message: message });
+    await newMessage.save();
+    res.json({ message: 'Message added successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/messages/all', async (req, res) => {
+  try {
+    const messages = await Message.find(); // Retrieve all messages from the database
+    res.json(messages); // Send a JSON response with the messages
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' }); // Handle errors with a 500 response
+  }
+});
+
+
 const port = process.env.PORT || 5000;
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
+
