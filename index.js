@@ -90,19 +90,19 @@ app.post('/api/submitSolution/:id', async (req, res) => {
   const { solution } = req.body;
 
   try {
-    const updatedQuery = await Query.findByIdAndUpdate(
-      id,
-      { solution, isResolved: true },
-      { new: true }
-    );
+    const query = await Query.findById(id);
 
-    if (updatedQuery) {
-      console.log('Solution submitted successfully');
-      res.status(200).json({ message: 'Solution submitted successfully' });
-    } else {
+    if (!query) {
       console.error('Query not found');
-      res.status(404).json({ error: 'Query not found' });
+      return res.status(404).json({ error: 'Query not found' });
     }
+
+    query.solutions.push({ solutionText: solution });
+
+    const updatedQuery = await query.save();
+
+    console.log('Solution submitted successfully');
+    res.status(200).json({ message: 'Solution submitted successfully', updatedQuery });
   } catch (error) {
     console.error('Error during solution submission:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -112,10 +112,10 @@ app.post('/api/submitSolution/:id', async (req, res) => {
 
 app.get('/api/solvedQueries', async (req, res) => {
   try {
-    const solvedQueries = await Query.find({ isResolved: true });
-    res.status(200).json(solvedQueries);
+    const queriesWithSolutions = await Query.find({ 'solutions.0': { $exists: true } });
+    res.status(200).json(queriesWithSolutions);
   } catch (error) {
-    console.error('Error fetching solved queries:', error);
+    console.error('Error fetching solved queries with solutions:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -140,6 +140,41 @@ app.get('/messages/all', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' }); // Handle errors with a 500 response
+  }
+});
+
+app.get('/api/solvedQueriesWithSolutions', async (req, res) => {
+  try {
+    const queriesWithSolutions = await Query.find({ 'solutions.0': { $exists: true } });
+    res.status(200).json(queriesWithSolutions);
+  } catch (error) {
+    console.error('Error fetching solved queries with solutions:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Add this route to your server
+app.post('/api/setResolvedStatus/:id', async (req, res) => {
+  const { id } = req.params;
+  const { isResolved } = req.body;
+
+  try {
+    const updatedQuery = await Query.findByIdAndUpdate(
+      id,
+      { isResolved },
+      { new: true }
+    );
+
+    if (updatedQuery) {
+      console.log('Resolved status updated successfully');
+      res.status(200).json({ message: 'Resolved status updated successfully' });
+    } else {
+      console.error('Query not found');
+      res.status(404).json({ error: 'Query not found' });
+    }
+  } catch (error) {
+    console.error('Error during resolved status update:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
