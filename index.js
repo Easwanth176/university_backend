@@ -5,8 +5,13 @@ import cors from 'cors';
 import Student from './src/models/Student.js';
 import Query from './src/models/Query.js';
 import Message from './src/models/Message.js';
+import ChatMessage from './src/models/ChatMessage.js';
+import { Server } from 'socket.io';
+import http from 'http';
 
 const app = express();
+const httpServer = http.createServer(app);
+const io = new Server(httpServer);
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
@@ -19,6 +24,34 @@ const db = mongoose.connection;
 db.on('error', console.error.bind(console, 'MongoDB connection error:'));
 db.once('open', () => {
   console.log('Connected to MongoDB:', mongoose.connection.name);
+});
+
+io.on('connection', (socket) => {
+  console.log('A user connected');
+
+  socket.on('joinRoom', ({ identifier, selectedTeacherEmail }) => {
+    // Sort the identifiers to create a consistent room name
+    const roomIdentifiers = [identifier, selectedTeacherEmail].sort();
+    const room = roomIdentifiers.join('_');
+    
+    socket.join(room);
+    console.log(`${socket.id} joined room ${room}`);
+    console.log(`${socket.id} joined room ${room}, with identifiers: ${roomIdentifiers}`);
+
+  });
+  socket.on('privateMessage', (data) => {
+    console.log('Received private message:', data);
+  
+    const updatedMessages = [
+      ...messages,
+      { sender: data.sender, message: data.message },
+    ];
+    setMessages(updatedMessages);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('A user disconnected');
+  });
 });
 
 app.post('/students', async (req, res) => {
@@ -52,7 +85,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-
 app.post('/api/submitQuery', async (req, res) => {
   const { Name, Regarding, Description, contact } = req.body;
 
@@ -73,7 +105,6 @@ app.post('/api/submitQuery', async (req, res) => {
   }
 });
 
-
 app.get('/api/unresolvedQueries', async (req, res) => {
   try {
     const unresolvedQueries = await Query.find({ isResolved: false });
@@ -84,10 +115,9 @@ app.get('/api/unresolvedQueries', async (req, res) => {
   }
 });
 
-
 app.post('/api/submitSolution/:id', async (req, res) => {
   const { id } = req.params;
-  const { solution } = req.body;
+  const { solution, solutionName } = req.body;
 
   try {
     const query = await Query.findById(id);
@@ -97,7 +127,7 @@ app.post('/api/submitSolution/:id', async (req, res) => {
       return res.status(404).json({ error: 'Query not found' });
     }
 
-    query.solutions.push({ solutionText: solution });
+    query.solutions.push({ solutionText: solution, solutionName: solutionName });
 
     const updatedQuery = await query.save();
 
@@ -109,7 +139,6 @@ app.post('/api/submitSolution/:id', async (req, res) => {
   }
 });
 
-
 app.get('/api/solvedQueries', async (req, res) => {
   try {
     const queriesWithSolutions = await Query.find({ 'solutions.0': { $exists: true } });
@@ -119,7 +148,6 @@ app.get('/api/solvedQueries', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
-
 
 app.post('/messages/add', async (req, res) => {
   try {
@@ -135,11 +163,11 @@ app.post('/messages/add', async (req, res) => {
 
 app.get('/messages/all', async (req, res) => {
   try {
-    const messages = await Message.find(); // Retrieve all messages from the database
-    res.json(messages); // Send a JSON response with the messages
+    const messages = await Message.find();
+    res.json(messages);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Internal Server Error' }); // Handle errors with a 500 response
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 });
 
@@ -153,7 +181,6 @@ app.get('/api/solvedQueriesWithSolutions', async (req, res) => {
   }
 });
 
-// Add this route to your server
 app.post('/api/setResolvedStatus/:id', async (req, res) => {
   const { id } = req.params;
   const { isResolved } = req.body;
@@ -178,9 +205,44 @@ app.post('/api/setResolvedStatus/:id', async (req, res) => {
   }
 });
 
+app.get('/api/getChatMessages/:identifier/:selectedTeacherEmail', async (req, res) => {
+  const { identifier, selectedTeacherEmail } = req.params;
+  console.log('Identifier:', identifier);
+  console.log('Selected Teacher Email:', selectedTeacherEmail);
 
-const port = process.env.PORT || 5000;
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  try {
+    const chatMessages = await ChatMessage.find({ identifier, 'selectedTeacherEmail': selectedTeacherEmail });
+    console.log('Fetched Messages:', chatMessages);
+
+    res.status(200).json(chatMessages);
+  } catch (error) {
+    console.error('Error fetching chat messages:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
+app.post('/api/storeChatMessages', async (req, res) => {
+  const { identifier, selectedTeacherEmail, messages } = req.body;
+
+  console.log('Received data:', { identifier, selectedTeacherEmail, messages });
+
+  try {
+    const chatMessage = new ChatMessage({
+      identifier,
+      selectedTeacherEmail,
+      messages,
+    });
+
+    await chatMessage.save();
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error storing chat messages:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+const port = process.env.PORT || 5000;
+httpServer.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});

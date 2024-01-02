@@ -5,9 +5,11 @@ const SolutionSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  solutionName: {
+    type: String,
+    required: true,
+  },
 });
-
-
 
 const FormSchema = new mongoose.Schema({
   Name: {
