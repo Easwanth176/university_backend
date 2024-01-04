@@ -6,12 +6,8 @@ import Student from './src/models/Student.js';
 import Query from './src/models/Query.js';
 import Message from './src/models/Message.js';
 import ChatMessage from './src/models/ChatMessage.js';
-import { Server } from 'socket.io';
-import http from 'http';
 
 const app = express();
-const httpServer = http.createServer(app);
-const io = new Server(httpServer);
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
@@ -26,33 +22,6 @@ db.once('open', () => {
   console.log('Connected to MongoDB:', mongoose.connection.name);
 });
 
-io.on('connection', (socket) => {
-  console.log('A user connected');
-
-  socket.on('joinRoom', ({ identifier, selectedTeacherEmail }) => {
-    // Sort the identifiers to create a consistent room name
-    const roomIdentifiers = [identifier, selectedTeacherEmail].sort();
-    const room = roomIdentifiers.join('_');
-    
-    socket.join(room);
-    console.log(`${socket.id} joined room ${room}`);
-    console.log(`${socket.id} joined room ${room}, with identifiers: ${roomIdentifiers}`);
-
-  });
-  socket.on('privateMessage', (data) => {
-    console.log('Received private message:', data);
-  
-    const updatedMessages = [
-      ...messages,
-      { sender: data.sender, message: data.message },
-    ];
-    setMessages(updatedMessages);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('A user disconnected');
-  });
-});
 
 app.post('/students', async (req, res) => {
   try {
@@ -171,6 +140,8 @@ app.get('/messages/all', async (req, res) => {
   }
 });
 
+
+
 app.get('/api/solvedQueriesWithSolutions', async (req, res) => {
   try {
     const queriesWithSolutions = await Query.find({ 'solutions.0': { $exists: true } });
@@ -211,15 +182,21 @@ app.get('/api/getChatMessages/:identifier/:selectedTeacherEmail', async (req, re
   console.log('Selected Teacher Email:', selectedTeacherEmail);
 
   try {
-    const chatMessages = await ChatMessage.find({ identifier, 'selectedTeacherEmail': selectedTeacherEmail });
-    console.log('Fetched Messages:', chatMessages);
+    const chatMessages = await ChatMessage.find({
+      $or: [
+        { identifier, selectedTeacherEmail },
+        { identifier: selectedTeacherEmail, selectedTeacherEmail: identifier }
+      ]
+    });
 
+    console.log('Fetched Messages:', chatMessages);
     res.status(200).json(chatMessages);
   } catch (error) {
     console.error('Error fetching chat messages:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 app.post('/api/storeChatMessages', async (req, res) => {
   const { identifier, selectedTeacherEmail, messages } = req.body;
@@ -243,6 +220,6 @@ app.post('/api/storeChatMessages', async (req, res) => {
 });
 
 const port = process.env.PORT || 5000;
-httpServer.listen(port, () => {
+app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
