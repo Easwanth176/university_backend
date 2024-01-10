@@ -22,7 +22,6 @@ db.once('open', () => {
   console.log('Connected to MongoDB:', mongoose.connection.name);
 });
 
-
 app.post('/students', async (req, res) => {
   try {
     const newStudent = new Student(req.body);
